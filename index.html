@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>東京冬旅 2025 | Tokyo Trip</title>
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Noto Sans TC + JP -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- Phosphor Icons (圖示庫) -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        body { font-family: 'Noto Sans TC', 'Noto Sans JP', sans-serif; background-color: #F3F4F6; }
+        .jp-font { font-family: 'Noto Sans JP', sans-serif; }
+        
+        /* 隱藏 Scrollbar 但保留功能 */
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* 玻璃擬態 */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        /* 轉場動畫 */
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
+        
+        /* 錄音波紋動畫 */
+        @keyframes ripple {
+            0% { transform: scale(1); opacity: 0.6; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+        .animate-ripple {
+            animation: ripple 1.5s infinite;
+        }
+
+        /* 錯誤訊息動畫 */
+        @keyframes slide-up {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-slide-up {
+            animation: slide-up 0.3s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="text-slate-700 h-screen flex flex-col overflow-hidden">
+
+    <div id="app" class="flex flex-col h-full max-w-md mx-auto w-full bg-white shadow-2xl relative sm:rounded-xl sm:my-4 sm:h-[95vh] sm:border-4 sm:border-slate-100">
+
+        <!-- 1. Header & 日期導航 -->
+        <header class="bg-indigo-600 text-white shrink-0 z-20 shadow-md">
+            <div class="p-4 flex justify-between items-center">
+                <div class="mr-2">
+                    <h1 class="text-xl font-bold tracking-wide flex items-center gap-2">
+                        <i class="ph-fill ph-airplane-tilt"></i> 東京冬旅 Tokyo
+                    </h1>
+                    <p class="text-xs text-indigo-200 mt-0.5 font-light tracking-wider">DEC 05 - DEC 09, 2025</p>
+                </div>
+                <!-- 功能切換按鈕區 -->
+                <div class="flex items-center gap-2 shrink-0">
+                    <!-- 新增：翻譯功能按鈕 (放在旅遊功能左邊) -->
+                    <button @click="viewMode = 'translate'" 
+                            :class="viewMode === 'translate' ? 'bg-white text-indigo-700 shadow-sm' : 'bg-indigo-500/30 text-indigo-200 hover:bg-indigo-500/50'"
+                            class="p-2.5 rounded-xl transition-all h-11 w-11 flex items-center justify-center border border-indigo-500/30">
+                        <i class="ph-bold ph-translate text-xl"></i>
+                    </button>
+
+                    <!-- 原有旅遊功能群組 -->
+                    <div class="flex bg-indigo-800/50 p-1 rounded-lg">
+                        <button @click="viewMode = 'plan'" :class="viewMode === 'plan' ? 'bg-white text-indigo-700 shadow-sm' : 'text-indigo-200'" class="p-2 rounded-md transition-all"><i class="ph-bold ph-calendar-check text-lg"></i></button>
+                        <button @click="viewMode = 'map'" :class="viewMode === 'map' ? 'bg-white text-indigo-700 shadow-sm' : 'text-indigo-200'" class="p-2 rounded-md transition-all"><i class="ph-bold ph-map-trifold text-lg"></i></button>
+                        <button @click="viewMode = 'money'" :class="viewMode === 'money' ? 'bg-white text-indigo-700 shadow-sm' : 'text-indigo-200'" class="p-2 rounded-md transition-all"><i class="ph-bold ph-currency-dollar text-lg"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 橫向日期選擇器 -->
+            <div class="flex overflow-x-auto hide-scroll px-2 pb-3 space-x-3 snap-x">
+                <div v-for="(day, index) in days" :key="index" 
+                     @click="currentDayIdx = index"
+                     class="snap-center shrink-0 flex flex-col items-center justify-center w-16 h-16 rounded-xl cursor-pointer transition-all border-2"
+                     :class="currentDayIdx === index ? 'bg-white text-indigo-600 border-white shadow-lg scale-105' : 'bg-indigo-500/50 text-indigo-100 border-transparent hover:bg-indigo-500'">
+                    <span class="text-xs font-medium opacity-80">{{ day.shortDate }}</span>
+                    <span class="text-lg font-bold">D{{ index + 1 }}</span>
+                </div>
+                <!-- 新增天數按鈕 -->
+                <button @click="addDay" class="shrink-0 w-12 h-16 rounded-xl flex items-center justify-center border-2 border-indigo-400 border-dashed text-indigo-200 hover:text-white hover:border-white transition">
+                    <i class="ph-bold ph-plus"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- 2. 主要內容區 (捲動區) -->
+        <main class="flex-1 overflow-y-auto bg-slate-50 relative hide-scroll">
+            
+            <!-- A. 行程視圖 (Plan View) -->
+            <transition name="fade" mode="out-in">
+                <div v-if="viewMode === 'plan'" :key="currentDayIdx" class="p-4 pb-24">
+                    
+                    <!-- 每日標題卡片 -->
+                    <div class="bg-white p-4 rounded-2xl shadow-sm mb-6 border border-slate-100 flex justify-between items-center">
+                        <div>
+                            <h2 class="text-2xl font-bold text-slate-800 jp-font">{{ currentDay.date }}</h2>
+                            <input v-model="currentDay.title" class="text-sm text-slate-500 bg-transparent border-b border-dashed border-slate-300 focus:border-indigo-500 focus:outline-none w-full mt-1" placeholder="輸入當日主題 (例如：淺草散策)">
+                        </div>
+                        
+                        <!-- 天氣顯示 -->
+                        <div class="flex flex-col items-end">
+                            <div v-if="weather && weather.temp !== null" class="text-right">
+                                <div class="flex items-center justify-end gap-2 text-indigo-600">
+                                    <i :class="['ph-duotone', weather.icon, 'text-3xl']"></i>
+                                    <span class="text-2xl font-bold font-mono">{{ weather.temp }}°</span>
+                                </div>
+                                <div class="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1 justify-end">
+                                    <i class="ph-bold ph-map-pin"></i> 東京現在
+                                </div>
+                            </div>
+                            <div v-else class="animate-pulse flex items-center gap-2">
+                                <div class="w-8 h-8 bg-slate-200 rounded-full"></div>
+                                <div class="w-8 h-4 bg-slate-200 rounded"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 航班資訊特別卡片 (D1 & D5) -->
+                    <div v-if="currentDayIdx === 0" class="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-4 text-white shadow-lg mb-6 relative overflow-hidden">
+                        <i class="ph-duotone ph-airplane-takeoff absolute -right-4 -bottom-4 text-9xl opacity-10"></i>
+                        <div class="flex justify-between items-end mb-2">
+                            <div class="text-center">
+                                <div class="text-2xl font-bold">12:10</div>
+                                <div class="text-xs opacity-80">TPE 台北</div>
+                            </div>
+                            <div class="flex flex-col items-center flex-1 px-4">
+                                <span class="text-xs font-mono tracking-widest opacity-80">SL394</span>
+                                <div class="w-full h-0.5 bg-white/30 relative my-1">
+                                    <div class="absolute right-0 -top-1 w-2 h-2 bg-white rounded-full"></div>
+                                </div>
+                                <span class="text-xs text-green-300 font-bold">3h 05m</span>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold">16:15</div>
+                                <div class="text-xs opacity-80">NRT 東京</div>
+                            </div>
+                        </div>
+                        <div class="bg-white/10 rounded px-2 py-1 text-xs inline-flex items-center gap-1">
+                            <i class="ph-fill ph-suitcase"></i> 記得填寫 Visit Japan Web
+                        </div>
+                    </div>
+
+                    <div v-if="currentDayIdx === 4" class="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-4 text-white shadow-lg mb-6 relative overflow-hidden">
+                        <div class="flex justify-between items-end mb-2">
+                            <div class="text-center">
+                                <div class="text-2xl font-bold">17:15</div>
+                                <div class="text-xs opacity-80">NRT 東京</div>
+                            </div>
+                            <div class="flex flex-col items-center flex-1 px-4">
+                                <span class="text-xs font-mono tracking-widest opacity-80">SL395</span>
+                                <div class="w-full h-0.5 bg-white/30 relative my-1">
+                                    <div class="absolute right-0 -top-1 w-2 h-2 bg-white rounded-full"></div>
+                                </div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold">20:20</div>
+                                <div class="text-xs opacity-80">TPE 台北</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 時間軸行程列表 -->
+                    <div class="relative pl-4 border-l-2 border-indigo-100 space-y-8">
+                        <div v-for="(item, idx) in currentDay.items" :key="idx" class="relative group">
+                            <!-- 裝飾圓點 -->
+                            <div class="absolute -left-[21px] top-3 w-3 h-3 rounded-full border-2 border-white shadow-sm"
+                                 :class="item.type === 'food' ? 'bg-orange-400' : item.type === 'shop' ? 'bg-pink-400' : 'bg-indigo-500'"></div>
+                            
+                            <!-- 內容卡片 -->
+                            <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow group-hover:border-indigo-200">
+                                <div class="flex items-start gap-3">
+                                    <!-- 時間輸入 (UI 優化版) -->
+                                    <div class="flex flex-col items-center w-20 shrink-0 gap-2">
+                                        <!-- 自訂時間顯示塊 -->
+                                        <div class="relative flex flex-col items-center justify-center bg-slate-50 border border-slate-200 rounded-xl p-1 w-full h-16 cursor-pointer hover:bg-indigo-50 hover:border-indigo-200 transition group/time">
+                                            <span class="text-[10px] font-medium text-slate-400 group-hover/time:text-indigo-400">{{ getTimePeriod(item.time) }}</span>
+                                            <span class="text-xl font-bold text-slate-700 group-hover/time:text-indigo-600 leading-none font-mono tracking-tight">{{ item.time || '--:--' }}</span>
+                                            <input v-model="item.time" type="time" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10">
+                                        </div>
+
+                                        <!-- 類型選擇 -->
+                                        <select v-model="item.type" class="text-[10px] bg-white border border-slate-200 rounded-md py-1 px-1 w-full text-center text-slate-500 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
+                                            <option value="spot">📍 景點</option>
+                                            <option value="food">🍴 美食</option>
+                                            <option value="shop">🛍️ 購物</option>
+                                            <option value="transport">🚇 交通</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- 主要內容 -->
+                                    <div class="flex-1 min-w-0 pt-1">
+                                        <input v-model="item.activity" class="block w-full text-base font-bold text-slate-800 placeholder-slate-300 bg-transparent border-none p-0 focus:ring-0" placeholder="行程名稱...">
+                                        <div class="flex items-center gap-1 mt-2">
+                                            <i class="ph-fill ph-map-pin text-indigo-400 text-xs shrink-0"></i>
+                                            <input v-model="item.location" class="flex-1 text-xs text-slate-500 bg-transparent border-none p-0 focus:ring-0 placeholder-slate-300 truncate" placeholder="輸入地點以導航">
+                                        </div>
+                                    </div>
+
+                                    <!-- 操作按鈕 -->
+                                    <div class="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity pt-1">
+                                        <a :href="getGoogleMapLink(item.location)" target="_blank" class="text-indigo-500 hover:bg-indigo-50 p-1 rounded">
+                                            <i class="ph-bold ph-navigation-arrow"></i>
+                                        </a>
+                                        <button @click="removeItem(idx)" class="text-red-300 hover:text-red-500 hover:bg-red-50 p-1 rounded">
+                                            <i class="ph-bold ph-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 新增按鈕 -->
+                        <button @click="addItem" class="flex items-center gap-2 text-indigo-400 hover:text-indigo-600 text-sm font-medium px-2 py-1 transition-colors relative -left-1">
+                            <div class="w-2 h-2 bg-indigo-300 rounded-full"></div>
+                            <i class="ph-bold ph-plus"></i> 新增行程
+                        </button>
+                    </div>
+
+                    <!-- 刪除整天按鈕 -->
+                    <div class="mt-12 pt-6 border-t border-slate-200 text-center">
+                        <button @click="removeCurrentDay" class="text-xs text-red-300 hover:text-red-500 flex items-center justify-center gap-1 mx-auto">
+                            <i class="ph-bold ph-trash"></i> 刪除這一天 (D{{currentDayIdx+1}})
+                        </button>
+                    </div>
+                </div>
+            </transition>
+
+            <!-- B. 地圖視圖 (Map View) -->
+            <div v-if="viewMode === 'map'" class="h-full flex flex-col">
+                <div class="p-4 bg-white shadow-sm z-10">
+                    <div class="relative">
+                        <i class="ph-bold ph-magnifying-glass absolute left-3 top-3 text-slate-400"></i>
+                        <input v-model="mapSearch" @keyup.enter="forceUpdateMap" class="w-full bg-slate-100 rounded-full pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="搜尋東京景點...">
+                    </div>
+                </div>
+                <div class="flex-1 relative bg-slate-200">
+                    <iframe :src="mapUrl" class="w-full h-full border-0" loading="lazy"></iframe>
+                    
+                    <!-- 推薦卡片 -->
+                    <div class="absolute bottom-4 left-4 right-4 bg-white/90 backdrop-blur rounded-xl p-3 shadow-lg border border-white/50">
+                        <div class="text-xs font-bold text-indigo-500 mb-2 tracking-wider">RECOMMENDATIONS</div>
+                        <div class="flex gap-2 overflow-x-auto hide-scroll">
+                            <button @click="quickSearch('Shibuya Sky')" class="shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 text-indigo-700 text-xs rounded-lg transition">Shibuya Sky</button>
+                            <button @click="quickSearch('六本木聖誕燈飾')" class="shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 text-indigo-700 text-xs rounded-lg transition">六本木燈飾</button>
+                            <button @click="quickSearch('明治神宮外苑')" class="shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 text-indigo-700 text-xs rounded-lg transition">銀杏並木</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- C. 分帳視圖 (Money View) -->
+            <div v-if="viewMode === 'money'" class="p-4 pb-24">
+                <div class="bg-indigo-600 text-white rounded-2xl p-6 shadow-lg mb-6 text-center relative">
+                    <!-- 匯率設定 -->
+                    <div class="absolute top-4 right-4 flex flex-col items-end">
+                        <label class="text-[10px] text-indigo-200 mb-1">匯率 JPY→TWD</label>
+                        <input v-model.number="exchangeRate" type="number" step="0.001" class="w-16 text-right text-xs text-indigo-900 rounded px-1 py-0.5 border-none focus:ring-0 font-mono font-bold">
+                    </div>
+
+                    <div class="text-sm opacity-80 mb-1">總支出 Total</div>
+                    <div class="text-4xl font-bold font-mono">¥ {{ totalExpense.toLocaleString() }}</div>
+                    <!-- 台幣換算顯示 -->
+                    <div class="text-lg font-bold text-indigo-200 mt-1">≈ NT$ {{ Math.round(totalExpense * exchangeRate).toLocaleString() }}</div>
+                    
+                    <div class="text-xs opacity-60 mt-2">（{{ participants.length }}人均分：¥ {{ (totalExpense / Math.max(1, participants.length)).toLocaleString(undefined, {maximumFractionDigits:0}) }}）</div>
+                </div>
+
+                <!-- 1. 墊付統計 -->
+                <div class="grid grid-cols-2 gap-2 mb-6">
+                    <div v-for="p in participants" :key="p" class="bg-white p-3 rounded-xl border border-slate-100 text-center shadow-sm">
+                        <div class="text-xs text-slate-400 mb-1">{{ p }} 墊付</div>
+                        <div class="text-sm font-bold text-indigo-600">¥{{ paidByPerson[p]?.toLocaleString() || 0 }}</div>
+                        <div class="text-[10px] text-slate-400">≈ NT$ {{ Math.round((paidByPerson[p] || 0) * exchangeRate).toLocaleString() }}</div>
+                    </div>
+                </div>
+
+                <!-- 2. 結帳建議 -->
+                <div v-if="settlementPlan.length > 0" class="bg-indigo-50 rounded-xl p-4 mb-6 border border-indigo-100">
+                    <h3 class="text-xs font-bold text-indigo-400 uppercase tracking-wide mb-3 flex items-center gap-1">
+                        <i class="ph-bold ph-scales"></i> 結帳建議 (多退少補)
+                    </h3>
+                    <div class="space-y-2">
+                        <div v-for="(plan, idx) in settlementPlan" :key="idx" class="flex items-center justify-between text-sm bg-white p-2 rounded-lg shadow-sm border border-indigo-50">
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-slate-600">{{ plan.from }}</span>
+                                <i class="ph-bold ph-arrow-right text-indigo-300 text-xs"></i>
+                                <span class="font-bold text-slate-600">{{ plan.to }}</span>
+                            </div>
+                            <div class="text-right">
+                                <div class="font-mono font-bold text-indigo-600">¥{{ plan.amount.toLocaleString() }}</div>
+                                <div class="text-[10px] text-slate-400 font-medium">≈ NT$ {{ Math.round(plan.amount * exchangeRate).toLocaleString() }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. 記帳輸入 -->
+                <div class="bg-white rounded-xl shadow-sm p-4 mb-6 border border-slate-100">
+                    <h3 class="text-sm font-bold text-slate-500 mb-3 uppercase tracking-wide">新增消費</h3>
+                    <div class="flex gap-2 mb-2">
+                        <input v-model="newExpense.item" placeholder="項目 (例: 燒肉)" class="flex-1 bg-slate-50 border-none rounded-lg text-sm px-3 py-2">
+                        <select v-model="newExpense.payer" class="bg-slate-50 border-none rounded-lg text-sm px-2 py-2 w-20">
+                            <option v-for="p in participants" :value="p">{{ p }}</option>
+                        </select>
+                    </div>
+                    <div class="flex gap-2">
+                        <div class="relative flex-1">
+                            <span class="absolute left-3 top-2 text-slate-400">¥</span>
+                            <input v-model.number="newExpense.amount" type="number" placeholder="0" class="w-full bg-slate-50 border-none rounded-lg text-sm pl-7 pr-3 py-2 font-mono">
+                        </div>
+                        <button @click="addExpense" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-bold transition">
+                            <i class="ph-bold ph-plus"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 4. 清單 -->
+                <div class="space-y-3">
+                    <div v-for="(exp, idx) in expenses" :key="idx" class="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 text-xs font-bold">
+                                {{ exp.payer.charAt(0) }}
+                            </div>
+                            <div>
+                                <div class="font-bold text-slate-700 text-sm">{{ exp.item }}</div>
+                                <div class="text-xs text-slate-400">{{ exp.date || '剛剛' }}</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="font-mono font-bold text-slate-700">¥{{ exp.amount.toLocaleString() }}</span>
+                            <button @click="removeExpense(idx)" class="text-slate-300 hover:text-red-400"><i class="ph-fill ph-x-circle"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+             <!-- D. 翻譯視圖 (Translate View) - 新功能 -->
+             <div v-if="viewMode === 'translate'" class="p-6 h-full flex flex-col justify-center items-center pb-32">
+                
+                <div class="text-center mb-8">
+                    <h2 class="text-2xl font-bold text-slate-800 mb-2">語音翻譯助手</h2>
+                    <p class="text-sm text-slate-400">點擊按鈕說話，自動連結 Google 翻譯</p>
+                </div>
+
+                <!-- 中翻日按鈕 -->
+                <button @click="startSpeech('zh-TW', 'ja')" class="w-full bg-gradient-to-br from-indigo-500 to-blue-600 text-white rounded-2xl p-6 shadow-lg mb-4 active:scale-95 transition-transform relative overflow-hidden group">
+                    <div class="relative z-10 flex items-center justify-between">
+                        <div class="text-left">
+                            <div class="text-xs opacity-80 mb-1 tracking-wider">我說中文 (轉日文)</div>
+                            <div class="text-2xl font-bold">按住說話 <i class="ph-bold ph-arrow-right text-sm"></i> JP</div>
+                        </div>
+                    </div>
+                    <!-- 錄音動畫 -->
+                    <div v-if="isRecording && currentLang==='zh-TW'" class="absolute inset-0 flex items-center justify-center">
+                         <div class="w-full h-full bg-indigo-400 animate-pulse absolute opacity-50"></div>
+                    </div>
+                </button>
+
+                <!-- 日翻中按鈕 -->
+                <button @click="startSpeech('ja-JP', 'zh-TW')" class="w-full bg-white border-2 border-slate-200 text-slate-700 rounded-2xl p-6 shadow-sm active:scale-95 transition-transform relative overflow-hidden group hover:border-indigo-300">
+                    <div class="relative z-10 flex items-center justify-between">
+                        <div class="text-left">
+                            <div class="text-xs text-slate-400 mb-1 tracking-wider">對方說日文 (轉中文)</div>
+                            <div class="text-2xl font-bold font-jp">日本語で話す</div>
+                        </div>
+                    </div>
+                    <div v-if="isRecording && currentLang==='ja-JP'" class="absolute inset-0 flex items-center justify-center">
+                        <div class="w-full h-full bg-slate-100 animate-pulse absolute opacity-50"></div>
+                    </div>
+                </button>
+
+                <!-- 狀態顯示 -->
+                <div class="mt-8 text-center h-12">
+                     <div v-if="isRecording" class="flex flex-col items-center gap-2">
+                        <div class="flex gap-1">
+                            <div class="w-2 h-2 bg-indigo-500 rounded-full animate-bounce"></div>
+                            <div class="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+                            <div class="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                        </div>
+                        <p class="text-indigo-500 font-bold text-sm">正在聆聽中...</p>
+                     </div>
+                     <p v-else class="text-slate-400 text-xs">錄音結束後將自動開啟 Google 翻譯頁面</p>
+                </div>
+            </div>
+
+        </main>
+        
+        <!-- 連線狀態指示燈 -->
+        <div class="absolute top-1 right-1 z-50">
+             <span v-if="isOnline" class="flex h-3 w-3 relative">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+            </span>
+            <span v-else class="h-2 w-2 rounded-full bg-gray-300 inline-block m-1" title="單機模式"></span>
+        </div>
+
+        <!-- Error Modal/Toast -->
+        <div v-if="errorMessage" class="absolute bottom-4 left-4 right-4 bg-red-500 text-white p-4 rounded-xl shadow-lg z-50 flex flex-col gap-2 animate-slide-up">
+            <div class="flex justify-between items-start">
+                <div class="flex items-center gap-2">
+                    <i class="ph-bold ph-warning-circle text-xl"></i>
+                    <span class="font-bold text-sm">發生錯誤</span>
+                </div>
+                <button @click="errorMessage = ''" class="text-white/80 hover:text-white"><i class="ph-bold ph-x"></i></button>
+            </div>
+            <p class="text-xs opacity-90 leading-relaxed">{{ errorMessage }}</p>
+            <a v-if="errorLink" :href="errorLink" target="_blank" class="bg-white text-red-500 text-xs font-bold py-2 px-3 rounded text-center mt-1 hover:bg-red-50 transition flex items-center justify-center gap-2">
+                <i class="ph-bold ph-arrow-square-out"></i> 直接開啟 Google 翻譯
+            </a>
+        </div>
+
+    </div>
+
+    <script type="module">
+        import { createApp, ref, computed, watch, onMounted, nextTick } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js'
+        
+        // -------------------------------------------------------------
+        // FIREBASE 設定區 (如果要多人連線，請取消註解並填入 Config)
+        // -------------------------------------------------------------
+        /*
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyDwzTYCodPHbpwkvkIFRQ6-S1f3GP3LkX0",
+          authDomain: "tokyotrip2025-c3a04.firebaseapp.com",
+          projectId: "tokyotrip2025-c3a04",
+          storageBucket: "tokyotrip2025-c3a04.firebasestorage.app",
+          messagingSenderId: "382628977466",
+          appId: "1:382628977466:web:048651923908a837074e03"
+        };
+        
+        // const app = initializeApp(firebaseConfig);
+        // const db = getFirestore(app);
+        // const tripRef = doc(db, "trips", "tokyo_2025_dec_v2");
+        */
+        // -------------------------------------------------------------
+
+        createApp({
+            setup() {
+                // UI 狀態
+                const viewMode = ref('plan'); // plan, map, money, translate
+                const currentDayIdx = ref(0);
+                const mapSearch = ref('Shinjuku');
+                const isOnline = ref(false); // 標示是否連上 Firebase
+                const participants = ['豪豪', '柔柔']; // 成員名單
+                const exchangeRate = ref(0.215); // 匯率 JPY to TWD
+                
+                // 翻譯狀態
+                const isRecording = ref(false);
+                const currentLang = ref('');
+                
+                // 錯誤處理
+                const errorMessage = ref('');
+                const errorLink = ref('');
+
+                // 天氣狀態
+                const weather = ref({ temp: null, icon: 'ph-sun', code: 0 });
+
+                // 資料結構
+                const days = ref([
+                    { 
+                        date: '12/05 (五)', shortDate: '12/05', title: '出發！前往東京', 
+                        items: [
+                            { time: '09:30', type: 'transport', activity: '抵達桃園機場', location: '桃園國際機場 第一航廈' },
+                            { time: '12:10', type: 'transport', activity: 'SL394 起飛', location: 'TPE' },
+                            { time: '16:15', type: 'transport', activity: '抵達東京成田', location: 'NRT' },
+                            { time: '17:30', type: 'transport', activity: '搭乘 Skyliner/NEX', location: '成田空港駅' },
+                            { time: '19:00', type: 'food', activity: '晚餐', location: '上野/新宿' }
+                        ] 
+                    },
+                    { date: '12/06 (六)', shortDate: '12/06', title: '東京市區探索', items: [] },
+                    { date: '12/07 (日)', shortDate: '12/07', title: '週末逛街行程', items: [] },
+                    { date: '12/08 (一)', shortDate: '12/08', title: '近郊或樂園', items: [] },
+                    { 
+                        date: '12/09 (二)', shortDate: '12/09', title: '最後採買與返程', 
+                        items: [
+                             { time: '11:00', type: 'shop', activity: '最後補貨/伴手禮', location: '東京車站' },
+                             { time: '14:30', type: 'transport', activity: '抵達機場報到', location: '成田機場' },
+                             { time: '17:15', type: 'transport', activity: 'SL395 起飛', location: 'NRT' }
+                        ] 
+                    }
+                ]);
+
+                const expenses = ref([]);
+                const newExpense = ref({ item: '', amount: '', payer: '豪豪' });
+
+                // 計算屬性
+                const currentDay = computed(() => days.value[currentDayIdx.value]);
+                
+                const mapUrl = computed(() => {
+                    // 使用無 Key 模式的 iframe (最穩定)
+                    return `https://maps.google.com/maps?q=${encodeURIComponent(mapSearch.value)}&t=&z=14&ie=UTF8&iwloc=&output=embed`;
+                });
+
+                const totalExpense = computed(() => {
+                    return expenses.value.reduce((sum, item) => sum + item.amount, 0);
+                });
+
+                // 分帳邏輯 - 1. 每個人的總墊付額
+                const paidByPerson = computed(() => {
+                    const map = {};
+                    participants.forEach(p => map[p] = 0);
+                    expenses.value.forEach(e => {
+                        if (map[e.payer] === undefined) map[e.payer] = 0; // 防止舊資料的 payer 不在名單內
+                        map[e.payer] += e.amount;
+                    });
+                    return map;
+                });
+
+                // 分帳邏輯 - 2. 結帳建議計算 (簡化版：均分)
+                const settlementPlan = computed(() => {
+                    if (totalExpense.value === 0) return [];
+                    
+                    const average = totalExpense.value / participants.length;
+                    
+                    // 計算每個人的餘額 (正: 墊太多應收錢, 負: 付太少應給錢)
+                    let balances = participants.map(p => ({
+                        name: p,
+                        val: (paidByPerson.value[p] || 0) - average
+                    }));
+
+                    // 分離出 欠錢的人(debtors) 和 應收錢的人(creditors)
+                    let debtors = balances.filter(b => b.val < -1).sort((a, b) => a.val - b.val); // 欠最多排前面
+                    let creditors = balances.filter(b => b.val > 1).sort((a, b) => b.val - a.val); // 收最多排前面
+
+                    const result = [];
+                    let i = 0; 
+                    let j = 0;
+
+                    // 貪婪算法匹配
+                    while (i < debtors.length && j < creditors.length) {
+                        let debtor = debtors[i];
+                        let creditor = creditors[j];
+                        
+                        // 交易金額為 兩者絕對值的最小值
+                        let amount = Math.min(Math.abs(debtor.val), creditor.val);
+                        amount = Math.round(amount); // 取整數方便看
+
+                        if (amount > 0) {
+                            result.push({ from: debtor.name, to: creditor.name, amount: amount });
+                        }
+
+                        // 更新餘額
+                        debtor.val += amount;
+                        creditor.val -= amount;
+
+                        // 如果處理完了就換下一個人
+                        if (Math.abs(debtor.val) < 1) i++;
+                        if (creditor.val < 1) j++;
+                    }
+                    return result;
+                });
+
+
+                // 方法
+                const addItem = () => {
+                    currentDay.value.items.push({ time: '', type: 'spot', activity: '', location: '' });
+                };
+
+                const removeItem = (idx) => {
+                    currentDay.value.items.splice(idx, 1);
+                };
+
+                const removeCurrentDay = () => {
+                    if(confirm('確定刪除這整天的行程？')) {
+                        days.value.splice(currentDayIdx.value, 1);
+                        if(currentDayIdx.value >= days.value.length) currentDayIdx.value = Math.max(0, days.value.length - 1);
+                    }
+                };
+
+                const addDay = () => {
+                    days.value.push({ date: '新的一天', shortDate: 'Day+', title: '', items: [] });
+                };
+
+                const getGoogleMapLink = (loc) => {
+                    if(!loc) return '#';
+                    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc)}`;
+                };
+
+                const quickSearch = (keyword) => {
+                    mapSearch.value = keyword;
+                };
+
+                const forceUpdateMap = () => {
+                    // Iframe updates automatically via computed
+                };
+
+                const addExpense = () => {
+                    if(!newExpense.value.item || !newExpense.value.amount) return;
+                    expenses.value.unshift({ ...newExpense.value, date: new Date().toLocaleDateString() });
+                    newExpense.value.item = '';
+                    newExpense.value.amount = '';
+                };
+
+                const removeExpense = (idx) => {
+                    expenses.value.splice(idx, 1);
+                };
+
+                // 輔助功能：計算時段
+                const getTimePeriod = (timeStr) => {
+                    if (!timeStr) return '設定';
+                    const hour = parseInt(timeStr.split(':')[0], 10);
+                    if (hour < 5) return '凌晨';
+                    if (hour < 11) return '上午';
+                    if (hour >= 11 && hour < 14) return '中午';
+                    if (hour >= 14 && hour < 18) return '下午';
+                    return '晚上';
+                };
+
+                // 語音翻譯功能
+                const startSpeech = (sourceLang, targetLang) => {
+                    // Reset error
+                    errorMessage.value = '';
+                    errorLink.value = '';
+
+                    // 檢查瀏覽器支援
+                    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                        errorMessage.value = '您的瀏覽器不支援語音辨識 API。';
+                        errorLink.value = `https://translate.google.com/?sl=${sourceLang}&tl=${targetLang}&op=translate`;
+                        return;
+                    }
+
+                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                    const recognition = new SpeechRecognition();
+                    
+                    recognition.lang = sourceLang; // 設定來源語言
+                    recognition.interimResults = false;
+                    recognition.maxAlternatives = 1;
+
+                    recognition.onstart = () => {
+                        isRecording.value = true;
+                        currentLang.value = sourceLang;
+                    };
+
+                    recognition.onend = () => {
+                        isRecording.value = false;
+                        currentLang.value = '';
+                    };
+
+                    recognition.onresult = (event) => {
+                        const transcript = event.results[0][0].transcript;
+                        console.log('Recognized:', transcript);
+                        
+                        // 開啟 Google Translate 並帶入文字
+                        const url = `https://translate.google.com/?sl=${sourceLang}&tl=${targetLang}&text=${encodeURIComponent(transcript)}&op=translate`;
+                        window.open(url, '_blank');
+                    };
+
+                    recognition.onerror = (event) => {
+                        console.error('Speech recognition error', event.error);
+                        isRecording.value = false;
+                        
+                        // 處理權限錯誤 (not-allowed)
+                        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                             errorMessage.value = '無法存取麥克風 (not-allowed)。這可能是因為瀏覽器權限被拒絕，或是在此環境中受限。';
+                             errorLink.value = `https://translate.google.com/?sl=${sourceLang}&tl=${targetLang}&op=translate`;
+                        } else {
+                            errorMessage.value = '錄音發生錯誤：' + event.error;
+                        }
+                    };
+
+                    try {
+                        recognition.start();
+                    } catch (e) {
+                         console.error("Start failed", e);
+                         errorMessage.value = "無法啟動錄音功能。";
+                    }
+                };
+
+                // 取得東京天氣 (Open-Meteo API)
+                const fetchTokyoWeather = async () => {
+                    try {
+                        const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=35.6895&longitude=139.6917&current_weather=true&timezone=Asia%2FTokyo');
+                        const data = await res.json();
+                        const w = data.current_weather;
+                        
+                        weather.value.temp = Math.round(w.temperature);
+                        
+                        // 簡單的 WMO Weather Code 轉換圖示
+                        const c = w.weathercode;
+                        if (c === 0) weather.value.icon = 'ph-sun';
+                        else if (c >= 1 && c <= 3) weather.value.icon = 'ph-cloud-sun';
+                        else if (c >= 45 && c <= 48) weather.value.icon = 'ph-cloud-fog';
+                        else if (c >= 51 && c <= 67) weather.value.icon = 'ph-cloud-rain';
+                        else if (c >= 71 && c <= 77) weather.value.icon = 'ph-snowflake';
+                        else if (c >= 80 && c <= 82) weather.value.icon = 'ph-cloud-rain';
+                        else if (c >= 95) weather.value.icon = 'ph-cloud-lightning';
+                        else weather.value.icon = 'ph-cloud';
+
+                    } catch (e) {
+                        console.error("天氣獲取失敗", e);
+                        weather.value.temp = '--';
+                    }
+                };
+
+                // 初始化 & 儲存邏輯
+                onMounted(() => {
+                    fetchTokyoWeather(); // 啟動時抓取天氣
+
+                    // 1. 先嘗試讀取 LocalStorage (單機優先)
+                    const localDays = localStorage.getItem('tokyo_days_v2');
+                    const localExp = localStorage.getItem('tokyo_exp_v2');
+                    const localRate = localStorage.getItem('tokyo_rate_v2'); // 讀取匯率
+                    
+                    if (localDays) days.value = JSON.parse(localDays);
+                    if (localExp) expenses.value = JSON.parse(localExp);
+                    if (localRate) exchangeRate.value = parseFloat(localRate);
+
+                    // 2. 如果有 Firebase Config (上方被取消註解)，這裡啟動監聽
+                    if (typeof initializeApp !== 'undefined' && typeof firebaseConfig !== 'undefined') {
+                        try {
+                            const app = initializeApp(firebaseConfig);
+                            const db = getFirestore(app);
+                            const tripRef = doc(db, "trips", "tokyo_2025_sl"); // 用特定的 ID
+                            
+                            onSnapshot(tripRef, (docSnap) => {
+                                if (docSnap.exists()) {
+                                    const data = docSnap.data();
+                                    // 為了避免輸入時被蓋掉，這裡可以做更細緻的判斷，目前簡易處理：直接更新
+                                    // 實務上建議加 debounce 或欄位鎖定
+                                    days.value = data.days;
+                                    expenses.value = data.expenses;
+                                    if(data.exchangeRate) exchangeRate.value = data.exchangeRate; // 同步匯率
+                                    isOnline.value = true;
+                                }
+                            });
+
+                            // 監聽變更並上傳
+                            watch([days, expenses, exchangeRate], async () => {
+                                await setDoc(tripRef, {
+                                    days: JSON.parse(JSON.stringify(days.value)),
+                                    expenses: JSON.parse(JSON.stringify(expenses.value)),
+                                    exchangeRate: exchangeRate.value
+                                });
+                            }, { deep: true });
+
+                        } catch (e) {
+                            console.log("Firebase 尚未設定或錯誤", e);
+                        }
+                    } else {
+                        // 純單機模式：監聽並存 LocalStorage
+                        watch([days, expenses, exchangeRate], () => {
+                            localStorage.setItem('tokyo_days_v2', JSON.stringify(days.value));
+                            localStorage.setItem('tokyo_exp_v2', JSON.stringify(expenses.value));
+                            localStorage.setItem('tokyo_rate_v2', exchangeRate.value.toString());
+                        }, { deep: true });
+                    }
+                });
+
+                return {
+                    viewMode, currentDayIdx, days, currentDay, participants,
+                    mapSearch, mapUrl, quickSearch, forceUpdateMap, getGoogleMapLink,
+                    addItem, removeItem, removeCurrentDay, addDay,
+                    expenses, newExpense, totalExpense, addExpense, removeExpense,
+                    paidByPerson, settlementPlan, exchangeRate,
+                    isOnline, getTimePeriod, weather,
+                    isRecording, currentLang, startSpeech,
+                    errorMessage, errorLink
+                };
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html>
