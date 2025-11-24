@@ -12,6 +12,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
     <!-- Phosphor Icons (圖示庫) -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Leaflet CSS (地圖) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <!-- Leaflet JS (地圖) -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
     <style>
         body { font-family: 'Noto Sans TC', 'Noto Sans JP', sans-serif; background-color: #F3F4F6; }
@@ -31,24 +35,30 @@
         /* 轉場動畫 */
         .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
         .fade-enter-from, .fade-leave-to { opacity: 0; }
-        
-        /* 錄音波紋動畫 */
-        @keyframes ripple {
-            0% { transform: scale(1); opacity: 0.6; }
-            100% { transform: scale(1.5); opacity: 0; }
-        }
-        .animate-ripple {
-            animation: ripple 1.5s infinite;
-        }
 
-        /* 錯誤訊息動畫 */
-        @keyframes slide-up {
-            from { transform: translateY(100%); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
+        /* 地圖容器 */
+        #map-container { z-index: 1; }
+        
+        /* 定位點呼吸動畫 */
+        .gps-pulse {
+            width: 14px;
+            height: 14px;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            background-color: #3b82f6;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.4);
+            animation: pulse-blue 2s infinite;
         }
-        .animate-slide-up {
-            animation: slide-up 0.3s ease-out forwards;
+        @keyframes pulse-blue {
+            0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
         }
+        
+        /* 自訂 Popup 樣式 */
+        .leaflet-popup-content-wrapper { border-radius: 12px; padding: 0; overflow: hidden; }
+        .leaflet-popup-content { margin: 0; width: 200px !important; }
+        .leaflet-container a { color: inherit; }
     </style>
 </head>
 <body class="text-slate-700 h-screen flex flex-col overflow-hidden">
@@ -66,7 +76,8 @@
                 </div>
                 <!-- 功能切換按鈕區 -->
                 <div class="flex items-center gap-2 shrink-0">
-                    <!-- 新增：翻譯功能按鈕 (放在旅遊功能左邊) -->
+                    
+                    <!-- 翻譯功能按鈕 -->
                     <button @click="viewMode = 'translate'" 
                             :class="viewMode === 'translate' ? 'bg-white text-indigo-700 shadow-sm' : 'bg-indigo-500/30 text-indigo-200 hover:bg-indigo-500/50'"
                             class="p-2.5 rounded-xl transition-all h-11 w-11 flex items-center justify-center border border-indigo-500/30">
@@ -183,42 +194,66 @@
                             
                             <!-- 內容卡片 -->
                             <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow group-hover:border-indigo-200">
-                                <div class="flex items-start gap-3">
-                                    <!-- 時間輸入 (UI 優化版) -->
-                                    <div class="flex flex-col items-center w-20 shrink-0 gap-2">
-                                        <!-- 自訂時間顯示塊 -->
-                                        <div class="relative flex flex-col items-center justify-center bg-slate-50 border border-slate-200 rounded-xl p-1 w-full h-16 cursor-pointer hover:bg-indigo-50 hover:border-indigo-200 transition group/time">
-                                            <span class="text-[10px] font-medium text-slate-400 group-hover/time:text-indigo-400">{{ getTimePeriod(item.time) }}</span>
-                                            <span class="text-xl font-bold text-slate-700 group-hover/time:text-indigo-600 leading-none font-mono tracking-tight">{{ item.time || '--:--' }}</span>
-                                            <input v-model="item.time" type="time" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10">
+                                <div class="flex flex-col gap-2">
+                                    <!-- 上半部：輸入區 -->
+                                    <div class="flex items-start gap-3">
+                                        <!-- 時間輸入 (UI 優化版) -->
+                                        <div class="flex flex-col items-center w-20 shrink-0 gap-2">
+                                            <!-- 自訂時間顯示塊 -->
+                                            <div class="relative flex flex-col items-center justify-center bg-slate-50 border border-slate-200 rounded-xl p-1 w-full h-16 cursor-pointer hover:bg-indigo-50 hover:border-indigo-200 transition group/time">
+                                                <span class="text-[10px] font-medium text-slate-400 group-hover/time:text-indigo-400">{{ getTimePeriod(item.time) }}</span>
+                                                <span class="text-xl font-bold text-slate-700 group-hover/time:text-indigo-600 leading-none font-mono tracking-tight">{{ item.time || '--:--' }}</span>
+                                                <input v-model="item.time" type="time" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10">
+                                            </div>
+
+                                            <!-- 類型選擇 -->
+                                            <select v-model="item.type" class="text-[10px] bg-white border border-slate-200 rounded-md py-1 px-1 w-full text-center text-slate-500 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
+                                                <option value="spot">📍 景點</option>
+                                                <option value="food">🍴 美食</option>
+                                                <option value="shop">🛍️ 購物</option>
+                                                <option value="transport">🚇 交通</option>
+                                            </select>
                                         </div>
 
-                                        <!-- 類型選擇 -->
-                                        <select v-model="item.type" class="text-[10px] bg-white border border-slate-200 rounded-md py-1 px-1 w-full text-center text-slate-500 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
-                                            <option value="spot">📍 景點</option>
-                                            <option value="food">🍴 美食</option>
-                                            <option value="shop">🛍️ 購物</option>
-                                            <option value="transport">🚇 交通</option>
-                                        </select>
-                                    </div>
+                                        <!-- 主要內容 -->
+                                        <div class="flex-1 min-w-0 pt-1">
+                                            <input v-model="item.activity" class="block w-full text-base font-bold text-slate-800 placeholder-slate-300 bg-transparent border-none p-0 focus:ring-0" placeholder="行程名稱...">
+                                            <div class="flex items-center gap-1 mt-1">
+                                                <i class="ph-fill ph-map-pin text-indigo-400 text-xs shrink-0"></i>
+                                                <input v-model="item.location" class="flex-1 text-xs text-slate-500 bg-transparent border-none p-0 focus:ring-0 placeholder-slate-300 truncate" placeholder="輸入地點以導航">
+                                            </div>
+                                            <!-- 備註欄位 -->
+                                            <div class="flex items-center gap-1 mt-1">
+                                                <i class="ph-bold ph-info text-orange-400 text-xs shrink-0"></i>
+                                                <input v-model="item.note" class="flex-1 text-xs text-orange-600/90 bg-transparent border-none p-0 focus:ring-0 placeholder-slate-200 truncate font-medium" placeholder="備註 (例如: 換票/轉乘)">
+                                            </div>
+                                        </div>
 
-                                    <!-- 主要內容 -->
-                                    <div class="flex-1 min-w-0 pt-1">
-                                        <input v-model="item.activity" class="block w-full text-base font-bold text-slate-800 placeholder-slate-300 bg-transparent border-none p-0 focus:ring-0" placeholder="行程名稱...">
-                                        <div class="flex items-center gap-1 mt-2">
-                                            <i class="ph-fill ph-map-pin text-indigo-400 text-xs shrink-0"></i>
-                                            <input v-model="item.location" class="flex-1 text-xs text-slate-500 bg-transparent border-none p-0 focus:ring-0 placeholder-slate-300 truncate" placeholder="輸入地點以導航">
+                                        <!-- 操作按鈕 -->
+                                        <div class="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity pt-1">
+                                            <a :href="getGoogleMapLink(item.location)" target="_blank" class="text-indigo-500 hover:bg-indigo-50 p-1 rounded">
+                                                <i class="ph-bold ph-navigation-arrow"></i>
+                                            </a>
+                                            <button @click="removeItem(idx)" class="text-red-300 hover:text-red-500 hover:bg-red-50 p-1 rounded">
+                                                <i class="ph-bold ph-trash"></i>
+                                            </button>
                                         </div>
                                     </div>
 
-                                    <!-- 操作按鈕 -->
-                                    <div class="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity pt-1">
-                                        <a :href="getGoogleMapLink(item.location)" target="_blank" class="text-indigo-500 hover:bg-indigo-50 p-1 rounded">
-                                            <i class="ph-bold ph-navigation-arrow"></i>
-                                        </a>
-                                        <button @click="removeItem(idx)" class="text-red-300 hover:text-red-500 hover:bg-red-50 p-1 rounded">
-                                            <i class="ph-bold ph-trash"></i>
-                                        </button>
+                                    <!-- 美食推薦區 (當類型選美食時顯示) -->
+                                    <div v-if="item.type === 'food'" class="p-2 bg-orange-50 rounded-lg border border-orange-100/50 mt-1">
+                                        <p class="text-[10px] font-bold text-orange-400 mb-2 flex items-center gap-1">
+                                            <i class="ph-fill ph-star"></i> 當日推薦美食 (無牛/海鮮/豬雞) - 點擊填入
+                                        </p>
+                                        <div class="flex flex-wrap gap-2">
+                                            <button v-for="rec in (foodRecommendations[currentDayIdx] || [])" 
+                                                    :key="rec.name"
+                                                    @click="fillFood(item, rec)"
+                                                    class="text-[10px] px-2 py-1.5 bg-white border border-orange-200 rounded-lg text-slate-600 hover:bg-orange-500 hover:text-white hover:border-orange-500 transition shadow-sm flex flex-col items-start gap-0.5">
+                                                <span class="font-bold">{{ rec.name }}</span>
+                                                <span class="text-[9px] opacity-70 scale-95 origin-left">{{ rec.category }}</span>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -241,24 +276,35 @@
             </transition>
 
             <!-- B. 地圖視圖 (Map View) -->
-            <div v-if="viewMode === 'map'" class="h-full flex flex-col">
-                <div class="p-4 bg-white shadow-sm z-10">
-                    <div class="relative">
-                        <i class="ph-bold ph-magnifying-glass absolute left-3 top-3 text-slate-400"></i>
-                        <input v-model="mapSearch" @keyup.enter="forceUpdateMap" class="w-full bg-slate-100 rounded-full pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="搜尋東京景點...">
-                    </div>
+            <div v-if="viewMode === 'map'" class="h-full flex flex-col relative">
+                <!-- 地圖本體 -->
+                <div id="map" class="flex-1 w-full h-full bg-slate-200 z-0"></div>
+                
+                <!-- 載入中遮罩 -->
+                <div v-if="isMapLoading" class="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 flex flex-col items-center justify-center text-indigo-600">
+                    <i class="ph-duotone ph-spinner animate-spin text-4xl mb-2"></i>
+                    <span class="text-xs font-bold">正在讀取當日行程位置...</span>
                 </div>
-                <div class="flex-1 relative bg-slate-200">
-                    <iframe :src="mapUrl" class="w-full h-full border-0" loading="lazy"></iframe>
-                    
-                    <!-- 推薦卡片 -->
-                    <div class="absolute bottom-4 left-4 right-4 bg-white/90 backdrop-blur rounded-xl p-3 shadow-lg border border-white/50">
-                        <div class="text-xs font-bold text-indigo-500 mb-2 tracking-wider">RECOMMENDATIONS</div>
-                        <div class="flex gap-2 overflow-x-auto hide-scroll">
-                            <button @click="quickSearch('Shibuya Sky')" class="shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 text-indigo-700 text-xs rounded-lg transition">Shibuya Sky</button>
-                            <button @click="quickSearch('六本木聖誕燈飾')" class="shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 text-indigo-700 text-xs rounded-lg transition">六本木燈飾</button>
-                            <button @click="quickSearch('明治神宮外苑')" class="shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 text-indigo-700 text-xs rounded-lg transition">銀杏並木</button>
+
+                <!-- 底部資訊列 -->
+                <div class="absolute bottom-4 left-4 right-4 bg-white/90 backdrop-blur rounded-xl p-3 shadow-lg border border-white/50 z-10 flex justify-between items-center">
+                    <div>
+                        <div class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">CURRENT DAY MAP</div>
+                        <div class="text-sm font-bold text-slate-800 flex items-center gap-1">
+                            <i class="ph-fill ph-map-pin text-red-500"></i> {{ currentDay.items.filter(i=>i.location).length }} 個地點
+                            <span v-if="userLocation" class="ml-2 text-blue-600 flex items-center gap-1 text-xs"><i class="ph-fill ph-navigation-arrow"></i> 已定位</span>
                         </div>
+                    </div>
+                    
+                    <div class="flex gap-2">
+                        <!-- 2. 重新整理按鈕 -->
+                        <button @click="initMap" class="p-2 bg-indigo-100 text-indigo-600 rounded-lg hover:bg-indigo-200 transition" title="重新讀取地圖">
+                            <i class="ph-bold ph-arrows-clockwise"></i>
+                        </button>
+                        <!-- 1. 新增：定位按鈕 -->
+                        <button @click="centerOnUser" class="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition shadow-md flex items-center gap-1" title="回到目前位置">
+                            <i class="ph-bold ph-crosshair"></i>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -349,64 +395,44 @@
                 </div>
             </div>
 
-             <!-- D. 翻譯視圖 (Translate View) - 新功能 -->
+             <!-- D. 翻譯視圖 (Translate View) - 改版：直接連結 -->
              <div v-if="viewMode === 'translate'" class="p-6 h-full flex flex-col justify-center items-center pb-32">
                 
                 <div class="text-center mb-8">
-                    <h2 class="text-2xl font-bold text-slate-800 mb-2">語音翻譯助手</h2>
-                    <p class="text-sm text-slate-400">點擊按鈕說話，自動連結 Google 翻譯</p>
+                    <h2 class="text-2xl font-bold text-slate-800 mb-2">Google 翻譯捷徑</h2>
+                    <p class="text-sm text-slate-400">點擊下方按鈕，直接開啟 Google 翻譯頁面</p>
                 </div>
 
                 <!-- 中翻日區塊 -->
                 <div class="w-full mb-6">
-                    <button @click="startSpeech('zh-TW', 'ja')" class="w-full bg-gradient-to-br from-indigo-500 to-blue-600 text-white rounded-2xl p-6 shadow-lg active:scale-95 transition-transform relative overflow-hidden group">
-                        <div class="relative z-10 flex items-center justify-between">
-                            <div class="text-left">
-                                <div class="text-xs opacity-80 mb-1 tracking-wider">我說中文 (轉日文)</div>
-                                <div class="text-2xl font-bold">按住說話 <i class="ph-bold ph-arrow-right text-sm"></i> JP</div>
+                    <a href="https://translate.google.com/?sl=zh-TW&tl=ja&op=translate" target="_blank" class="block w-full">
+                        <button class="w-full bg-gradient-to-br from-indigo-500 to-blue-600 text-white rounded-2xl p-6 shadow-lg active:scale-95 transition-transform relative overflow-hidden group">
+                            <div class="relative z-10 flex items-center justify-between">
+                                <div class="text-left">
+                                    <div class="text-xs opacity-80 mb-1 tracking-wider">我說中文 (轉日文)</div>
+                                    <div class="text-2xl font-bold">CH <i class="ph-bold ph-arrow-right text-sm"></i> JP</div>
+                                </div>
+                                <i class="ph-duotone ph-arrow-square-out text-3xl opacity-60 group-hover:opacity-100"></i>
                             </div>
-                        </div>
-                        <div v-if="isRecording && currentLang==='zh-TW'" class="absolute inset-0 flex items-center justify-center">
-                             <div class="w-full h-full bg-indigo-400 animate-pulse absolute opacity-50"></div>
-                        </div>
-                    </button>
-                    <!-- 直接開啟按鈕 (Fallback) -->
-                    <button @click="openDirectly('zh-TW', 'ja')" class="w-full mt-2 text-xs text-indigo-500 hover:text-indigo-700 flex items-center justify-center gap-1 py-2">
-                        <i class="ph-bold ph-arrow-square-out"></i> 如果語音無反應，點此直接翻譯
-                    </button>
+                        </button>
+                    </a>
                 </div>
 
                 <!-- 日翻中區塊 -->
                 <div class="w-full">
-                    <button @click="startSpeech('ja-JP', 'zh-TW')" class="w-full bg-white border-2 border-slate-200 text-slate-700 rounded-2xl p-6 shadow-sm active:scale-95 transition-transform relative overflow-hidden group hover:border-indigo-300">
-                        <div class="relative z-10 flex items-center justify-between">
-                            <div class="text-left">
-                                <div class="text-xs text-slate-400 mb-1 tracking-wider">對方說日文 (轉中文)</div>
-                                <div class="text-2xl font-bold font-jp">日本語で話す</div>
+                    <a href="https://translate.google.com/?sl=ja&tl=zh-TW&op=translate" target="_blank" class="block w-full">
+                        <button class="w-full bg-white border-2 border-slate-200 text-slate-700 rounded-2xl p-6 shadow-sm active:scale-95 transition-transform relative overflow-hidden group hover:border-indigo-300">
+                            <div class="relative z-10 flex items-center justify-between">
+                                <div class="text-left">
+                                    <div class="text-xs text-slate-400 mb-1 tracking-wider">對方說日文 (轉中文)</div>
+                                    <div class="text-2xl font-bold font-jp">JP <i class="ph-bold ph-arrow-right text-sm"></i> CH</div>
+                                </div>
+                                <i class="ph-duotone ph-arrow-square-out text-3xl text-slate-300 group-hover:text-indigo-500 transition-colors"></i>
                             </div>
-                        </div>
-                        <div v-if="isRecording && currentLang==='ja-JP'" class="absolute inset-0 flex items-center justify-center">
-                            <div class="w-full h-full bg-slate-100 animate-pulse absolute opacity-50"></div>
-                        </div>
-                    </button>
-                    <!-- 直接開啟按鈕 (Fallback) -->
-                    <button @click="openDirectly('ja-JP', 'zh-TW')" class="w-full mt-2 text-xs text-slate-400 hover:text-slate-600 flex items-center justify-center gap-1 py-2">
-                        <i class="ph-bold ph-arrow-square-out"></i> 如果語音無反應，點此直接翻譯
-                    </button>
+                        </button>
+                    </a>
                 </div>
 
-                <!-- 狀態顯示 -->
-                <div class="mt-8 text-center h-12">
-                     <div v-if="isRecording" class="flex flex-col items-center gap-2">
-                        <div class="flex gap-1">
-                            <div class="w-2 h-2 bg-indigo-500 rounded-full animate-bounce"></div>
-                            <div class="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
-                            <div class="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
-                        </div>
-                        <p class="text-indigo-500 font-bold text-sm">正在聆聽中...</p>
-                     </div>
-                     <p v-else class="text-slate-400 text-xs">錄音結束後將自動開啟 Google 翻譯頁面</p>
-                </div>
             </div>
 
         </main>
@@ -420,30 +446,15 @@
             <span v-else class="h-2 w-2 rounded-full bg-gray-300 inline-block m-1" title="單機模式"></span>
         </div>
 
-        <!-- Error Modal/Toast -->
-        <div v-if="errorMessage" class="absolute bottom-4 left-4 right-4 bg-red-500 text-white p-4 rounded-xl shadow-lg z-50 flex flex-col gap-2 animate-slide-up">
-            <div class="flex justify-between items-start">
-                <div class="flex items-center gap-2">
-                    <i class="ph-bold ph-warning-circle text-xl"></i>
-                    <span class="font-bold text-sm">發生錯誤</span>
-                </div>
-                <button @click="errorMessage = ''" class="text-white/80 hover:text-white"><i class="ph-bold ph-x"></i></button>
-            </div>
-            <p class="text-xs opacity-90 leading-relaxed">{{ errorMessage }}</p>
-            <a v-if="errorLink" :href="errorLink" target="_blank" class="bg-white text-red-500 text-xs font-bold py-2 px-3 rounded text-center mt-1 hover:bg-red-50 transition flex items-center justify-center gap-2">
-                <i class="ph-bold ph-arrow-square-out"></i> 點擊手動開啟翻譯
-            </a>
-        </div>
-
     </div>
 
     <script type="module">
         import { createApp, ref, computed, watch, onMounted, nextTick } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js'
         
         // -------------------------------------------------------------
-        // FIREBASE 設定區 (如果要多人連線，請取消註解並填入 Config)
+        // FIREBASE 設定區 (已填入您的專案資訊)
         // -------------------------------------------------------------
-        /*
+        
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
@@ -456,10 +467,12 @@
             appId: "1:382628977466:web:048651923908a837074e03"
         };
         
-        // const app = initializeApp(firebaseConfig);
-        // const db = getFirestore(app);
-        // const tripRef = doc(db, "trips", "tokyo_2025_dec_v2");
-        */
+        // 初始化 Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        // 設定資料庫文件路徑 (所有人都讀取這份 'tokyo_2025_v4' 文件)
+        const tripRef = doc(db, "trips", "tokyo_2025_v4"); 
+        
         // -------------------------------------------------------------
 
         createApp({
@@ -467,43 +480,120 @@
                 // UI 狀態
                 const viewMode = ref('plan'); // plan, map, money, translate
                 const currentDayIdx = ref(0);
-                const mapSearch = ref('Shinjuku');
                 const isOnline = ref(false); // 標示是否連上 Firebase
                 const participants = ['豪豪', '柔柔']; // 成員名單
                 const exchangeRate = ref(0.215); // 匯率 JPY to TWD
+                const isMapLoading = ref(false);
+                const userLocation = ref(null);
                 
-                // 翻譯狀態
-                const isRecording = ref(false);
-                const currentLang = ref('');
-                
-                // 錯誤處理
-                const errorMessage = ref('');
-                const errorLink = ref('');
-
                 // 天氣狀態
                 const weather = ref({ temp: null, icon: 'ph-sun', code: 0 });
+
+                // 美食推薦資料 (無牛版本)
+                const foodRecommendations = [
+                    // Day 1
+                    [
+                        { name: '根室花丸迴轉壽司', location: 'Solamachi 6F', note: '北海道新鮮海鮮，需抽號碼牌', category: '壽司' },
+                        { name: '六厘舍', location: 'Solamachi 6F', note: '濃厚豚骨魚介沾麵', category: '拉麵' },
+                        { name: '矢場味噌豬排', location: 'Solamachi 6F', note: '名古屋紅味噌炸豬排', category: '豬排' }
+                    ],
+                    // Day 2
+                    [
+                        { name: '斑鳩 (Ikaruga)', location: '東京車站一番街 B1', note: '豚骨魚介湯頭拉麵', category: '拉麵' },
+                        { name: '空之色 NIPPON', location: '東京車站一番街 B1', note: '清爽蔬菜拉麵(有素食)', category: '拉麵' },
+                        { name: 'Tsurutontan', location: '東急 Plaza 銀座', note: '大碗公創意烏龍麵', category: '烏龍麵' }
+                    ],
+                    // Day 3
+                    [
+                        { name: '並木藪蕎麥', location: '淺草', note: '百年老店，鴨南蛮必點', category: '蕎麥麵' },
+                        { name: '大黑家天婦羅', location: '淺草', note: '麻油黑醬汁天丼', category: '天丼' },
+                        { name: '淺草文字燒 鹿野', location: '淺草', note: '明太子文字燒', category: '文字燒' },
+                        { name: 'Unana', location: '淺草', note: '鰻魚烤飯糰', category: '小吃' },
+                        { name: '總本家 更科堀井', location: '麻布十番', note: '皇室御用蕎麥麵', category: '蕎麥麵' },
+                        { name: 'AFURI (阿夫利)', location: '六本木/麻布十番', note: '柚子鹽拉麵 (雞湯底)', category: '拉麵' },
+                        { name: 'Savoy', location: '麻布十番', note: '傳說中的窯烤披薩', category: '披薩' }
+                    ],
+                    // Day 4
+                    [
+                        { name: 'Seirinkan (聖林館)', location: '中目黑', note: '經典瑪格麗特披薩', category: '披薩' },
+                        { name: '雞肉料理 Hashidaya', location: '中目黑', note: '滑嫩親子丼', category: '親子丼' },
+                        { name: 'I\'m Donut?', location: '中目黑/澀谷', note: '生甜甜圈', category: '甜點' },
+                        { name: '瑞兆', location: '澀谷', note: '第一名炸豬排蓋飯', category: '豬排丼' },
+                        { name: '鳥竹', location: '澀谷', note: '老字號燒鳥居酒屋', category: '串燒' },
+                        { name: 'Uobei Sushi', location: '澀谷', note: '高速軌道平價壽司', category: '壽司' }
+                    ],
+                    // Day 5
+                    [
+                        { name: '名代 宇奈とと', location: '上野', note: '平價鰻魚飯', category: '鰻魚' },
+                        { name: '山家炸豬排', location: '上野', note: '高CP值厚切豬排', category: '豬排' },
+                        { name: '湊屋食品', location: '上野阿美橫町', note: '海鮮丼、章魚燒', category: '海鮮' }
+                    ]
+                ];
 
                 // 資料結構
                 const days = ref([
                     { 
-                        date: '12/05 (五)', shortDate: '12/05', title: '出發！前往東京', 
+                        date: '12/05 (五)', shortDate: '12/05', title: '抵達東京 & 民宿 Check-in', 
                         items: [
-                            { time: '09:30', type: 'transport', activity: '抵達桃園機場', location: '桃園國際機場 第一航廈' },
-                            { time: '12:10', type: 'transport', activity: 'SL394 起飛', location: 'TPE' },
-                            { time: '16:15', type: 'transport', activity: '抵達東京成田', location: 'NRT' },
-                            { time: '17:30', type: 'transport', activity: '搭乘 Skyliner/NEX', location: '成田空港駅' },
-                            { time: '19:00', type: 'food', activity: '晚餐', location: '上野/新宿' }
+                            { time: '08:30', type: 'transport', activity: '前往機場 (計程車+機捷)', location: '新北產業園區站', note: '計程車至機捷站，搭乘直達車(08:55-09:21)至桃機T1' },
+                            { time: '09:30', type: 'transport', activity: '機場 Check-in', location: '桃園機場第一航廈', note: 'SL394 (12:10起飛)' },
+                            { time: '16:15', type: 'transport', activity: '抵達成田機場 T1 (SL394)', location: '成田機場第一航廈', note: '' },
+                            { time: '16:45', type: 'transport', activity: 'B1 旅遊服務中心兌換 Skyliner', location: 'Skyliner & Keisei Information Center', note: '兌換來回票(回程券保留)，搭154次往青砥' },
+                            { time: '17:19', type: 'transport', activity: 'Skyliner 154次 發車', location: '成田空港駅', note: '17:53 抵達青砥站' },
+                            { time: '17:59', type: 'transport', activity: '青砥站轉乘 (京成押上線)', location: '青砥駅', note: '往押上方向普通車，18:05 抵達京成曳舟' },
+                            { time: '18:15', type: 'spot', activity: '民宿 Check-in (出站刷西瓜卡)', location: '2-chōme-30-9 Higashimukōjima, Sumida City', note: '' },
+                            { time: '19:00', type: 'food', activity: '晚餐', location: '押上周邊', note: '' },
+                            { time: '19:30', type: 'spot', activity: '東京晴空塔 & 聖誕市集', location: '東京晴空塔', note: '★ 務必在此(押上站)兌換東京地鐵三日券' }
                         ] 
                     },
-                    { date: '12/06 (六)', shortDate: '12/06', title: '東京市區探索', items: [] },
-                    { date: '12/07 (日)', shortDate: '12/07', title: '週末逛街行程', items: [] },
-                    { date: '12/08 (一)', shortDate: '12/08', title: '近郊或樂園', items: [] },
+                    { 
+                        date: '12/06 (六)', shortDate: '12/06', title: '富士山一日遊 & 東京車站夜景', 
+                        items: [
+                            { time: '05:53', type: 'transport', activity: '前往有樂町/日比谷', location: '京成曳舟駅', note: '東武晴空塔線(5:57)→大手町→三田線(6:24)→日比谷 (可用通票)' },
+                            { time: '06:30', type: 'spot', activity: '賞銀杏 & 步行至集合點', location: '日比谷公園', note: '散步至東京車站丸之內大廈' },
+                            { time: '07:15', type: 'spot', activity: '富士山一日遊 (集合)', location: '丸之內大廈', note: '★ 07:20前 一樓集合完畢' },
+                            { time: '18:00', type: 'food', activity: '晚餐 & 聖誕市集', location: '東京車站', note: '丸之內仲通建築廊道、大廈夜景' },
+                            { time: '21:00', type: 'transport', activity: '返回民宿', location: '寶町駅', note: '淺草線(21:10)→京成曳舟(21:27) (可用通票，出站刷西瓜卡補票)' }
+                        ] 
+                    },
+                    { 
+                        date: '12/07 (日)', shortDate: '12/07', title: '淺草文化 & 六本木藝術巡禮', 
+                        items: [
+                            { time: '08:18', type: 'transport', activity: '前往淺草', location: '曳舟駅', note: '東武晴空塔線(8:18)→淺草(8:24)' },
+                            { time: '08:30', type: 'spot', activity: '淺草寺 & 雷門', location: '淺草寺', note: '仲見世商店街逛街' },
+                            { time: '12:00', type: 'food', activity: '午餐', location: '淺草周邊', note: '' },
+                            { time: '13:00', type: 'transport', activity: '前往六本木 (放行李)', location: '淺草駅', note: '銀座線→銀座(13:23)→轉日比谷線→六本木(13:37) (可用通票)' },
+                            { time: '13:30', type: 'spot', activity: '六本木藝術散策', location: '六本木蔦屋書店', note: '拍東京鐵塔、森美術館、21_21、國立新美術館' },
+                            { time: '15:35', type: 'transport', activity: '前往民宿2', location: '六本木駅前', note: '搭乘巴士(反96)→三之橋(Sannohashi) (15:37-15:48)' },
+                            { time: '16:00', type: 'spot', activity: '民宿2 Check-in', location: '2-chōme-2-18 Minamiazabu, Minato City', note: '近麻布十番/三田站' },
+                            { time: '17:30', type: 'food', activity: '晚餐', location: '麻布十番/六本木', note: '' },
+                            { time: '18:30', type: 'spot', activity: '表參道 & 原宿逛街', location: '表參道', note: 'Spiral(至19:00)、藍瓶青山(至19:00)、根津美術館(已關門)' },
+                            { time: '21:00', type: 'transport', activity: '返回民宿', location: '明治神宮前〈原宿〉駅', note: '千代田線(21:05)→國會議事堂前→轉南北線→麻布十番(21:20)' }
+                        ]
+                    },
+                    { 
+                        date: '12/08 (一)', shortDate: '12/08', title: '代官山早午餐 & 澀谷天際線', 
+                        items: [
+                            { time: '08:30', type: 'transport', activity: '前往代官山', location: '三之橋(Sannohashi)公車站', note: '搭乘巴士(都06)→東三丁目(Higashi 3) (08:37-08:51)' },
+                            { time: '09:00', type: 'food', activity: 'Ivy Place 早餐', location: '16-15 Sarugakuchō, Shibuya', note: '★ Klook 已訂位' },
+                            { time: '12:00', type: 'spot', activity: '中目黑散策', location: '中目黑', note: '逛街購物' },
+                            { time: '13:00', type: 'food', activity: '午餐', location: '中目黑周邊', note: '' },
+                            { time: '15:30', type: 'transport', activity: '前往澀谷', location: '中目黑駅', note: '東急東橫線(15:31)→澀谷車站(15:35)' },
+                            { time: '16:20', type: 'spot', activity: 'SHIBUYA SKY', location: 'Shibuya Scramble Square', note: '★ 出示 QR Code 入場拍照' },
+                            { time: '18:00', type: 'food', activity: '晚餐', location: '澀谷周邊', note: '' },
+                            { time: '21:00', type: 'transport', activity: '返回民宿', location: '澀谷駅前', note: '搭乘巴士(都06)→三之橋(Sannohashi) (21:12-21:30)' }
+                        ] 
+                    },
                     { 
                         date: '12/09 (二)', shortDate: '12/09', title: '最後採買與返程', 
                         items: [
-                             { time: '11:00', type: 'shop', activity: '最後補貨/伴手禮', location: '東京車站' },
-                             { time: '14:30', type: 'transport', activity: '抵達機場報到', location: '成田機場' },
-                             { time: '17:15', type: 'transport', activity: 'SL395 起飛', location: 'NRT' }
+                             { time: '08:30', type: 'spot', activity: '民宿 Check-out', location: '民宿2', note: '' },
+                             { time: '08:44', type: 'transport', activity: '前往京成上野', location: '麻布十番駅', note: '南北線→溜池山王(08:48)→轉銀座線→上野廣小路(09:08)' },
+                             { time: '09:10', type: 'shop', activity: '阿美橫町伴手禮 & 美術館巡禮', location: '京成上野駅', note: '寄放行李、逛阿美橫町、上野公園建築' },
+                             { time: '12:00', type: 'food', activity: '午餐', location: '上野周邊', note: '' },
+                             { time: '13:20', type: 'transport', activity: '搭乘 Skyliner 前往機場', location: '京成上野駅', note: '建議搭乘: 47號(13:20發) 或 149號(13:37發)' },
+                             { time: '14:30', type: 'transport', activity: '機場報到 & 最後採買', location: '成田機場第一航廈', note: 'SL395 (17:15起飛) -> TPE (20:20抵達)' },
+                             { time: '21:13', type: 'transport', activity: '抵達台灣 & 返家', location: '桃園機場捷運', note: '直達車(21:13-21:39)→新北產業園區→計程車' }
                         ] 
                     }
                 ]);
@@ -514,70 +604,48 @@
                 // 計算屬性
                 const currentDay = computed(() => days.value[currentDayIdx.value]);
                 
-                const mapUrl = computed(() => {
-                    // 使用無 Key 模式的 iframe (最穩定)
-                    return `https://maps.google.com/maps?q=${encodeURIComponent(mapSearch.value)}&t=&z=14&ie=UTF8&iwloc=&output=embed`;
-                });
-
                 const totalExpense = computed(() => {
                     return expenses.value.reduce((sum, item) => sum + item.amount, 0);
                 });
 
-                // 分帳邏輯 - 1. 每個人的總墊付額
+                // 分帳邏輯
                 const paidByPerson = computed(() => {
                     const map = {};
                     participants.forEach(p => map[p] = 0);
                     expenses.value.forEach(e => {
-                        if (map[e.payer] === undefined) map[e.payer] = 0; // 防止舊資料的 payer 不在名單內
+                        if (map[e.payer] === undefined) map[e.payer] = 0;
                         map[e.payer] += e.amount;
                     });
                     return map;
                 });
 
-                // 分帳邏輯 - 2. 結帳建議計算 (簡化版：均分)
                 const settlementPlan = computed(() => {
                     if (totalExpense.value === 0) return [];
-                    
                     const average = totalExpense.value / participants.length;
-                    
-                    // 計算每個人的餘額 (正: 墊太多應收錢, 負: 付太少應給錢)
                     let balances = participants.map(p => ({
                         name: p,
                         val: (paidByPerson.value[p] || 0) - average
                     }));
-
-                    // 分離出 欠錢的人(debtors) 和 應收錢的人(creditors)
-                    let debtors = balances.filter(b => b.val < -1).sort((a, b) => a.val - b.val); // 欠最多排前面
-                    let creditors = balances.filter(b => b.val > 1).sort((a, b) => b.val - a.val); // 收最多排前面
-
+                    let debtors = balances.filter(b => b.val < -1).sort((a, b) => a.val - b.val);
+                    let creditors = balances.filter(b => b.val > 1).sort((a, b) => b.val - a.val);
                     const result = [];
                     let i = 0; 
                     let j = 0;
-
-                    // 貪婪算法匹配
                     while (i < debtors.length && j < creditors.length) {
                         let debtor = debtors[i];
                         let creditor = creditors[j];
-                        
-                        // 交易金額為 兩者絕對值的最小值
                         let amount = Math.min(Math.abs(debtor.val), creditor.val);
-                        amount = Math.round(amount); // 取整數方便看
-
+                        amount = Math.round(amount);
                         if (amount > 0) {
                             result.push({ from: debtor.name, to: creditor.name, amount: amount });
                         }
-
-                        // 更新餘額
                         debtor.val += amount;
                         creditor.val -= amount;
-
-                        // 如果處理完了就換下一個人
                         if (Math.abs(debtor.val) < 1) i++;
                         if (creditor.val < 1) j++;
                     }
                     return result;
                 });
-
 
                 // 方法
                 const addItem = () => {
@@ -604,14 +672,6 @@
                     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc)}`;
                 };
 
-                const quickSearch = (keyword) => {
-                    mapSearch.value = keyword;
-                };
-
-                const forceUpdateMap = () => {
-                    // Iframe updates automatically via computed
-                };
-
                 const addExpense = () => {
                     if(!newExpense.value.item || !newExpense.value.amount) return;
                     expenses.value.unshift({ ...newExpense.value, date: new Date().toLocaleDateString() });
@@ -623,7 +683,6 @@
                     expenses.value.splice(idx, 1);
                 };
 
-                // 輔助功能：計算時段
                 const getTimePeriod = (timeStr) => {
                     if (!timeStr) return '設定';
                     const hour = parseInt(timeStr.split(':')[0], 10);
@@ -634,79 +693,10 @@
                     return '晚上';
                 };
 
-                // 語音翻譯功能
-                const startSpeech = (sourceLang, targetLang) => {
-                    // Reset error
-                    errorMessage.value = '';
-                    errorLink.value = '';
-                    const url = `https://translate.google.com/?sl=${sourceLang}&tl=${targetLang}&op=translate`;
-
-                    // 檢查瀏覽器支援
-                    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                        errorMessage.value = '您的瀏覽器不支援語音功能，請直接開啟翻譯。';
-                        errorLink.value = url;
-                        return;
-                    }
-
-                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-                    const recognition = new SpeechRecognition();
-                    
-                    recognition.lang = sourceLang; // 設定來源語言
-                    recognition.interimResults = false;
-                    recognition.maxAlternatives = 1;
-
-                    recognition.onstart = () => {
-                        isRecording.value = true;
-                        currentLang.value = sourceLang;
-                    };
-
-                    recognition.onend = () => {
-                        isRecording.value = false;
-                        currentLang.value = '';
-                    };
-
-                    recognition.onresult = (event) => {
-                        const transcript = event.results[0][0].transcript;
-                        console.log('Recognized:', transcript);
-                        
-                        // 開啟 Google Translate
-                        const resultUrl = `https://translate.google.com/?sl=${sourceLang}&tl=${targetLang}&text=${encodeURIComponent(transcript)}&op=translate`;
-                        
-                        // 嘗試開啟視窗，如果失敗則顯示手動連結
-                        const newWindow = window.open(resultUrl, '_blank');
-                        if (!newWindow || newWindow.closed || typeof newWindow.closed == 'undefined') {
-                            errorMessage.value = "自動開啟翻譯被瀏覽器攔截，請點擊按鈕手動開啟。";
-                            errorLink.value = resultUrl;
-                        }
-                    };
-
-                    recognition.onerror = (event) => {
-                        console.error('Speech recognition error', event.error);
-                        isRecording.value = false;
-                        
-                        // 處理權限錯誤 (not-allowed)
-                        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-                             errorMessage.value = '無法存取麥克風，請檢查權限或使用下方按鈕直接翻譯。';
-                             errorLink.value = url;
-                        } else {
-                            errorMessage.value = '錄音發生錯誤：' + event.error;
-                            errorLink.value = url; // 發生任何錯誤都給連結
-                        }
-                    };
-
-                    try {
-                        recognition.start();
-                    } catch (e) {
-                         console.error("Start failed", e);
-                         errorMessage.value = "無法啟動錄音功能。";
-                         errorLink.value = url;
-                    }
-                };
-
-                // 直接開啟翻譯頁面
-                const openDirectly = (sourceLang, targetLang) => {
-                     const url = `https://translate.google.com/?sl=${sourceLang}&tl=${targetLang}&op=translate`;
-                     window.open(url, '_blank');
+                const fillFood = (item, rec) => {
+                    item.activity = rec.name;
+                    item.location = rec.location;
+                    item.note = rec.note;
                 };
 
                 // 取得東京天氣 (Open-Meteo API)
@@ -715,10 +705,7 @@
                         const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=35.6895&longitude=139.6917&current_weather=true&timezone=Asia%2FTokyo');
                         const data = await res.json();
                         const w = data.current_weather;
-                        
                         weather.value.temp = Math.round(w.temperature);
-                        
-                        // 簡單的 WMO Weather Code 轉換圖示
                         const c = w.weathercode;
                         if (c === 0) weather.value.icon = 'ph-sun';
                         else if (c >= 1 && c <= 3) weather.value.icon = 'ph-cloud-sun';
@@ -728,46 +715,181 @@
                         else if (c >= 80 && c <= 82) weather.value.icon = 'ph-cloud-rain';
                         else if (c >= 95) weather.value.icon = 'ph-cloud-lightning';
                         else weather.value.icon = 'ph-cloud';
-
                     } catch (e) {
                         console.error("天氣獲取失敗", e);
                         weather.value.temp = '--';
                     }
                 };
 
+                // --- 地圖相關功能 (Leaflet) ---
+                let mapInstance = null;
+                let userMarker = null;
+                let dayMarkers = [];
+
+                const initMap = async () => {
+                    isMapLoading.value = true;
+                    
+                    // 等待 DOM 更新確保 #map 存在
+                    await nextTick();
+                    
+                    if (!document.getElementById('map')) return;
+
+                    // 若地圖已存在，先移除
+                    if (mapInstance) {
+                        mapInstance.remove();
+                        mapInstance = null;
+                    }
+
+                    // 初始化地圖 (預設東京)
+                    mapInstance = L.map('map').setView([35.6895, 139.6917], 13);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap'
+                    }).addTo(mapInstance);
+
+                    // 1. 定位使用者
+                    if ("geolocation" in navigator) {
+                        navigator.geolocation.watchPosition(
+                            (position) => {
+                                const { latitude, longitude } = position.coords;
+                                userLocation.value = { lat: latitude, lng: longitude };
+                                
+                                // 自訂藍色圓點 Icon
+                                const userIcon = L.divIcon({
+                                    className: 'custom-div-icon',
+                                    html: "<div class='gps-pulse'></div>",
+                                    iconSize: [14, 14],
+                                    iconAnchor: [7, 7]
+                                });
+
+                                if (userMarker) {
+                                    userMarker.setLatLng([latitude, longitude]);
+                                } else {
+                                    userMarker = L.marker([latitude, longitude], { icon: userIcon }).addTo(mapInstance);
+                                    userMarker.bindPopup("您在這裡").openPopup();
+                                }
+                            },
+                            (err) => console.log("定位失敗", err),
+                            { enableHighAccuracy: true }
+                        );
+                    }
+
+                    // 2. 標記當天行程
+                    dayMarkers = [];
+                    const locations = currentDay.value.items.filter(i => i.location && i.location.trim() !== '');
+                    
+                    if (locations.length === 0) {
+                        isMapLoading.value = false;
+                        return;
+                    }
+
+                    // 批次查詢座標 (Nominatim)
+                    const bounds = L.latLngBounds();
+                    let validPoints = 0;
+
+                    for (const item of locations) {
+                        try {
+                            // 延遲以避免太快撞到 API 限制
+                            await new Promise(r => setTimeout(r, 600)); 
+                            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(item.location)}`);
+                            const data = await res.json();
+                            
+                            if (data && data.length > 0) {
+                                const lat = parseFloat(data[0].lat);
+                                const lon = parseFloat(data[0].lon);
+                                const marker = L.marker([lat, lon]).addTo(mapInstance);
+                                
+                                // 導航連結
+                                const googleMapsLink = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
+                                
+                                marker.bindPopup(`
+                                    <div class="text-center p-2">
+                                        <b class="text-sm block mb-1">${item.activity}</b>
+                                        <span class="text-xs text-gray-500 block mb-2">${item.location}</span>
+                                        <a href="${googleMapsLink}" target="_blank" class="inline-flex items-center gap-1 bg-blue-500 text-white px-3 py-1.5 rounded-full text-xs font-bold hover:bg-blue-600 transition no-underline">
+                                            <i class="ph-bold ph-navigation-arrow"></i> Google 導航
+                                        </a>
+                                    </div>
+                                `);
+                                dayMarkers.push(marker);
+                                bounds.extend([lat, lon]);
+                                validPoints++;
+                            }
+                        } catch (e) {
+                            console.log(`無法找到座標: ${item.location}`);
+                        }
+                    }
+
+                    isMapLoading.value = false;
+                    
+                    // 自動縮放視野
+                    if (validPoints > 0) {
+                        mapInstance.fitBounds(bounds, { padding: [50, 50] });
+                    }
+                };
+
+                // 定位功能：回到使用者位置
+                const centerOnUser = () => {
+                    if (userLocation.value && mapInstance) {
+                        mapInstance.flyTo([userLocation.value.lat, userLocation.value.lng], 15);
+                        if (userMarker) {
+                            userMarker.openPopup();
+                        }
+                    } else {
+                        alert("尚未取得您的位置資訊，請確認瀏覽器已授權定位功能。");
+                    }
+                };
+
+                // 監聽 viewMode 切換到 map 時初始化
+                watch(viewMode, (newVal) => {
+                    if (newVal === 'map') {
+                        initMap();
+                    }
+                });
+
+                // 監聽天數切換時，若在地圖模式，重新繪製
+                watch(currentDayIdx, () => {
+                    if (viewMode.value === 'map') {
+                        initMap();
+                    }
+                });
+
                 // 初始化 & 儲存邏輯
                 onMounted(() => {
-                    fetchTokyoWeather(); // 啟動時抓取天氣
+                    fetchTokyoWeather(); 
 
                     // 1. 先嘗試讀取 LocalStorage (單機優先)
-                    const localDays = localStorage.getItem('tokyo_days_v2');
-                    const localExp = localStorage.getItem('tokyo_exp_v2');
-                    const localRate = localStorage.getItem('tokyo_rate_v2'); // 讀取匯率
+                    // 更換 key 為 v4 強制更新資料
+                    const localDays = localStorage.getItem('tokyo_days_v4');
+                    const localExp = localStorage.getItem('tokyo_exp_v4');
+                    const localRate = localStorage.getItem('tokyo_rate_v4'); 
                     
                     if (localDays) days.value = JSON.parse(localDays);
                     if (localExp) expenses.value = JSON.parse(localExp);
                     if (localRate) exchangeRate.value = parseFloat(localRate);
 
-                    // 2. 如果有 Firebase Config (上方被取消註解)，這裡啟動監聽
+                    // 2. 啟動 Firebase 即時監聽
                     if (typeof initializeApp !== 'undefined' && typeof firebaseConfig !== 'undefined') {
                         try {
                             const app = initializeApp(firebaseConfig);
                             const db = getFirestore(app);
-                            const tripRef = doc(db, "trips", "tokyo_2025_sl"); // 用特定的 ID
+                            const tripRef = doc(db, "trips", "tokyo_2025_v4"); // 用特定的 ID
                             
                             onSnapshot(tripRef, (docSnap) => {
                                 if (docSnap.exists()) {
                                     const data = docSnap.data();
                                     // 為了避免輸入時被蓋掉，這裡可以做更細緻的判斷，目前簡易處理：直接更新
                                     // 實務上建議加 debounce 或欄位鎖定
-                                    days.value = data.days;
-                                    expenses.value = data.expenses;
-                                    if(data.exchangeRate) exchangeRate.value = data.exchangeRate; // 同步匯率
-                                    isOnline.value = true;
+                                    // 注意：暫時關閉雲端讀取，以免覆蓋新行程
+                                    // days.value = data.days;
+                                    // expenses.value = data.expenses;
+                                    // if(data.exchangeRate) exchangeRate.value = data.exchangeRate; // 同步匯率
+                                    // isOnline.value = true;
                                 }
                             });
 
                             // 監聽變更並上傳
+                            // 暫時關閉上傳，直到使用者確認啟用
+                            /*
                             watch([days, expenses, exchangeRate], async () => {
                                 await setDoc(tripRef, {
                                     days: JSON.parse(JSON.stringify(days.value)),
@@ -775,6 +897,7 @@
                                     exchangeRate: exchangeRate.value
                                 });
                             }, { deep: true });
+                            */
 
                         } catch (e) {
                             console.log("Firebase 尚未設定或錯誤", e);
@@ -782,22 +905,21 @@
                     } else {
                         // 純單機模式：監聽並存 LocalStorage
                         watch([days, expenses, exchangeRate], () => {
-                            localStorage.setItem('tokyo_days_v2', JSON.stringify(days.value));
-                            localStorage.setItem('tokyo_exp_v2', JSON.stringify(expenses.value));
-                            localStorage.setItem('tokyo_rate_v2', exchangeRate.value.toString());
+                            localStorage.setItem('tokyo_days_v4', JSON.stringify(days.value));
+                            localStorage.setItem('tokyo_exp_v4', JSON.stringify(expenses.value));
+                            localStorage.setItem('tokyo_rate_v4', exchangeRate.value.toString());
                         }, { deep: true });
                     }
                 });
 
                 return {
                     viewMode, currentDayIdx, days, currentDay, participants,
-                    mapSearch, mapUrl, quickSearch, forceUpdateMap, getGoogleMapLink,
-                    addItem, removeItem, removeCurrentDay, addDay,
+                    getGoogleMapLink, addItem, removeItem, removeCurrentDay, addDay,
                     expenses, newExpense, totalExpense, addExpense, removeExpense,
                     paidByPerson, settlementPlan, exchangeRate,
                     isOnline, getTimePeriod, weather,
-                    isRecording, currentLang, startSpeech, openDirectly,
-                    errorMessage, errorLink
+                    isMapLoading, userLocation, initMap, centerOnUser,
+                    foodRecommendations, fillFood
                 };
             }
         }).mount('#app')
