@@ -357,32 +357,43 @@
                     <p class="text-sm text-slate-400">點擊按鈕說話，自動連結 Google 翻譯</p>
                 </div>
 
-                <!-- 中翻日按鈕 -->
-                <button @click="startSpeech('zh-TW', 'ja')" class="w-full bg-gradient-to-br from-indigo-500 to-blue-600 text-white rounded-2xl p-6 shadow-lg mb-4 active:scale-95 transition-transform relative overflow-hidden group">
-                    <div class="relative z-10 flex items-center justify-between">
-                        <div class="text-left">
-                            <div class="text-xs opacity-80 mb-1 tracking-wider">我說中文 (轉日文)</div>
-                            <div class="text-2xl font-bold">按住說話 <i class="ph-bold ph-arrow-right text-sm"></i> JP</div>
+                <!-- 中翻日區塊 -->
+                <div class="w-full mb-6">
+                    <button @click="startSpeech('zh-TW', 'ja')" class="w-full bg-gradient-to-br from-indigo-500 to-blue-600 text-white rounded-2xl p-6 shadow-lg active:scale-95 transition-transform relative overflow-hidden group">
+                        <div class="relative z-10 flex items-center justify-between">
+                            <div class="text-left">
+                                <div class="text-xs opacity-80 mb-1 tracking-wider">我說中文 (轉日文)</div>
+                                <div class="text-2xl font-bold">按住說話 <i class="ph-bold ph-arrow-right text-sm"></i> JP</div>
+                            </div>
                         </div>
-                    </div>
-                    <!-- 錄音動畫 -->
-                    <div v-if="isRecording && currentLang==='zh-TW'" class="absolute inset-0 flex items-center justify-center">
-                         <div class="w-full h-full bg-indigo-400 animate-pulse absolute opacity-50"></div>
-                    </div>
-                </button>
+                        <div v-if="isRecording && currentLang==='zh-TW'" class="absolute inset-0 flex items-center justify-center">
+                             <div class="w-full h-full bg-indigo-400 animate-pulse absolute opacity-50"></div>
+                        </div>
+                    </button>
+                    <!-- 直接開啟按鈕 (Fallback) -->
+                    <button @click="openDirectly('zh-TW', 'ja')" class="w-full mt-2 text-xs text-indigo-500 hover:text-indigo-700 flex items-center justify-center gap-1 py-2">
+                        <i class="ph-bold ph-arrow-square-out"></i> 如果語音無反應，點此直接翻譯
+                    </button>
+                </div>
 
-                <!-- 日翻中按鈕 -->
-                <button @click="startSpeech('ja-JP', 'zh-TW')" class="w-full bg-white border-2 border-slate-200 text-slate-700 rounded-2xl p-6 shadow-sm active:scale-95 transition-transform relative overflow-hidden group hover:border-indigo-300">
-                    <div class="relative z-10 flex items-center justify-between">
-                        <div class="text-left">
-                            <div class="text-xs text-slate-400 mb-1 tracking-wider">對方說日文 (轉中文)</div>
-                            <div class="text-2xl font-bold font-jp">日本語で話す</div>
+                <!-- 日翻中區塊 -->
+                <div class="w-full">
+                    <button @click="startSpeech('ja-JP', 'zh-TW')" class="w-full bg-white border-2 border-slate-200 text-slate-700 rounded-2xl p-6 shadow-sm active:scale-95 transition-transform relative overflow-hidden group hover:border-indigo-300">
+                        <div class="relative z-10 flex items-center justify-between">
+                            <div class="text-left">
+                                <div class="text-xs text-slate-400 mb-1 tracking-wider">對方說日文 (轉中文)</div>
+                                <div class="text-2xl font-bold font-jp">日本語で話す</div>
+                            </div>
                         </div>
-                    </div>
-                    <div v-if="isRecording && currentLang==='ja-JP'" class="absolute inset-0 flex items-center justify-center">
-                        <div class="w-full h-full bg-slate-100 animate-pulse absolute opacity-50"></div>
-                    </div>
-                </button>
+                        <div v-if="isRecording && currentLang==='ja-JP'" class="absolute inset-0 flex items-center justify-center">
+                            <div class="w-full h-full bg-slate-100 animate-pulse absolute opacity-50"></div>
+                        </div>
+                    </button>
+                    <!-- 直接開啟按鈕 (Fallback) -->
+                    <button @click="openDirectly('ja-JP', 'zh-TW')" class="w-full mt-2 text-xs text-slate-400 hover:text-slate-600 flex items-center justify-center gap-1 py-2">
+                        <i class="ph-bold ph-arrow-square-out"></i> 如果語音無反應，點此直接翻譯
+                    </button>
+                </div>
 
                 <!-- 狀態顯示 -->
                 <div class="mt-8 text-center h-12">
@@ -420,7 +431,7 @@
             </div>
             <p class="text-xs opacity-90 leading-relaxed">{{ errorMessage }}</p>
             <a v-if="errorLink" :href="errorLink" target="_blank" class="bg-white text-red-500 text-xs font-bold py-2 px-3 rounded text-center mt-1 hover:bg-red-50 transition flex items-center justify-center gap-2">
-                <i class="ph-bold ph-arrow-square-out"></i> 直接開啟 Google 翻譯
+                <i class="ph-bold ph-arrow-square-out"></i> 點擊手動開啟翻譯
             </a>
         </div>
 
@@ -437,12 +448,12 @@
         import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
-          apiKey: "AIzaSyDwzTYCodPHbpwkvkIFRQ6-S1f3GP3LkX0",
-          authDomain: "tokyotrip2025-c3a04.firebaseapp.com",
-          projectId: "tokyotrip2025-c3a04",
-          storageBucket: "tokyotrip2025-c3a04.firebasestorage.app",
-          messagingSenderId: "382628977466",
-          appId: "1:382628977466:web:048651923908a837074e03"
+            apiKey: "AIzaSyDwzTYCodPHbpwkvkIFRQ6-S1f3GP3LkX0",
+            authDomain: "tokyotrip2025-c3a04.firebaseapp.com",
+            projectId: "tokyotrip2025-c3a04",
+            storageBucket: "tokyotrip2025-c3a04.firebasestorage.app",
+            messagingSenderId: "382628977466",
+            appId: "1:382628977466:web:048651923908a837074e03"
         };
         
         // const app = initializeApp(firebaseConfig);
@@ -628,11 +639,12 @@
                     // Reset error
                     errorMessage.value = '';
                     errorLink.value = '';
+                    const url = `https://translate.google.com/?sl=${sourceLang}&tl=${targetLang}&op=translate`;
 
                     // 檢查瀏覽器支援
                     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                        errorMessage.value = '您的瀏覽器不支援語音辨識 API。';
-                        errorLink.value = `https://translate.google.com/?sl=${sourceLang}&tl=${targetLang}&op=translate`;
+                        errorMessage.value = '您的瀏覽器不支援語音功能，請直接開啟翻譯。';
+                        errorLink.value = url;
                         return;
                     }
 
@@ -657,9 +669,15 @@
                         const transcript = event.results[0][0].transcript;
                         console.log('Recognized:', transcript);
                         
-                        // 開啟 Google Translate 並帶入文字
-                        const url = `https://translate.google.com/?sl=${sourceLang}&tl=${targetLang}&text=${encodeURIComponent(transcript)}&op=translate`;
-                        window.open(url, '_blank');
+                        // 開啟 Google Translate
+                        const resultUrl = `https://translate.google.com/?sl=${sourceLang}&tl=${targetLang}&text=${encodeURIComponent(transcript)}&op=translate`;
+                        
+                        // 嘗試開啟視窗，如果失敗則顯示手動連結
+                        const newWindow = window.open(resultUrl, '_blank');
+                        if (!newWindow || newWindow.closed || typeof newWindow.closed == 'undefined') {
+                            errorMessage.value = "自動開啟翻譯被瀏覽器攔截，請點擊按鈕手動開啟。";
+                            errorLink.value = resultUrl;
+                        }
                     };
 
                     recognition.onerror = (event) => {
@@ -668,10 +686,11 @@
                         
                         // 處理權限錯誤 (not-allowed)
                         if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-                             errorMessage.value = '無法存取麥克風 (not-allowed)。這可能是因為瀏覽器權限被拒絕，或是在此環境中受限。';
-                             errorLink.value = `https://translate.google.com/?sl=${sourceLang}&tl=${targetLang}&op=translate`;
+                             errorMessage.value = '無法存取麥克風，請檢查權限或使用下方按鈕直接翻譯。';
+                             errorLink.value = url;
                         } else {
                             errorMessage.value = '錄音發生錯誤：' + event.error;
+                            errorLink.value = url; // 發生任何錯誤都給連結
                         }
                     };
 
@@ -680,7 +699,14 @@
                     } catch (e) {
                          console.error("Start failed", e);
                          errorMessage.value = "無法啟動錄音功能。";
+                         errorLink.value = url;
                     }
+                };
+
+                // 直接開啟翻譯頁面
+                const openDirectly = (sourceLang, targetLang) => {
+                     const url = `https://translate.google.com/?sl=${sourceLang}&tl=${targetLang}&op=translate`;
+                     window.open(url, '_blank');
                 };
 
                 // 取得東京天氣 (Open-Meteo API)
@@ -770,7 +796,7 @@
                     expenses, newExpense, totalExpense, addExpense, removeExpense,
                     paidByPerson, settlementPlan, exchangeRate,
                     isOnline, getTimePeriod, weather,
-                    isRecording, currentLang, startSpeech,
+                    isRecording, currentLang, startSpeech, openDirectly,
                     errorMessage, errorLink
                 };
             }
