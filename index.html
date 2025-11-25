@@ -470,8 +470,8 @@
         // 初始化 Firebase
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        // 設定資料庫文件路徑 (所有人都讀取這份 'tokyo_2025_v4' 文件)
-        const tripRef = doc(db, "trips", "tokyo_2025_v4"); 
+        // 設定資料庫文件路徑 (所有人都讀取這份 'tokyo_2025_v5' 文件，確保清空舊資料)
+        const tripRef = doc(db, "trips", "tokyo_2025_v5"); 
         
         // -------------------------------------------------------------
 
@@ -481,6 +481,7 @@
                 const viewMode = ref('plan'); // plan, map, money, translate
                 const currentDayIdx = ref(0);
                 const isOnline = ref(false); // 標示是否連上 Firebase
+                const isFirebaseReady = ref(false); // 新增：確保下載完成後才允許寫入
                 const participants = ['豪豪', '柔柔']; // 成員名單
                 const exchangeRate = ref(0.215); // 匯率 JPY to TWD
                 const isMapLoading = ref(false);
@@ -858,10 +859,10 @@
                     fetchTokyoWeather(); 
 
                     // 1. 先嘗試讀取 LocalStorage (單機優先)
-                    // 更換 key 為 v4 強制更新資料
-                    const localDays = localStorage.getItem('tokyo_days_v4');
-                    const localExp = localStorage.getItem('tokyo_exp_v4');
-                    const localRate = localStorage.getItem('tokyo_rate_v4'); 
+                    // 更換 key 為 v5 強制更新資料
+                    const localDays = localStorage.getItem('tokyo_days_v5');
+                    const localExp = localStorage.getItem('tokyo_exp_v5');
+                    const localRate = localStorage.getItem('tokyo_rate_v5'); 
                     
                     if (localDays) days.value = JSON.parse(localDays);
                     if (localExp) expenses.value = JSON.parse(localExp);
@@ -872,32 +873,39 @@
                         try {
                             const app = initializeApp(firebaseConfig);
                             const db = getFirestore(app);
-                            const tripRef = doc(db, "trips", "tokyo_2025_v4"); // 用特定的 ID
+                            const tripRef = doc(db, "trips", "tokyo_2025_v5"); // 用特定的 ID
                             
                             onSnapshot(tripRef, (docSnap) => {
                                 if (docSnap.exists()) {
                                     const data = docSnap.data();
-                                    // 為了避免輸入時被蓋掉，這裡可以做更細緻的判斷，目前簡易處理：直接更新
-                                    // 實務上建議加 debounce 或欄位鎖定
-                                    // 注意：暫時關閉雲端讀取，以免覆蓋新行程
-                                    // days.value = data.days;
-                                    // expenses.value = data.expenses;
-                                    // if(data.exchangeRate) exchangeRate.value = data.exchangeRate; // 同步匯率
-                                    // isOnline.value = true;
+                                    // 雲端有資料才同步，這裡先由雲端覆蓋本地，確保多人一致
+                                    days.value = data.days;
+                                    expenses.value = data.expenses;
+                                    if(data.exchangeRate) exchangeRate.value = data.exchangeRate;
+                                    isOnline.value = true;
+                                    isFirebaseReady.value = true; // 解鎖寫入
+                                } else {
+                                    // 雲端無資料 (新 ID v5)，立刻寫入初始資料
+                                    setDoc(tripRef, {
+                                        days: JSON.parse(JSON.stringify(days.value)),
+                                        expenses: JSON.parse(JSON.stringify(expenses.value)),
+                                        exchangeRate: exchangeRate.value
+                                    });
+                                    isOnline.value = true;
+                                    isFirebaseReady.value = true; // 解鎖寫入
                                 }
                             });
 
                             // 監聽變更並上傳
-                            // 暫時關閉上傳，直到使用者確認啟用
-                            /*
                             watch([days, expenses, exchangeRate], async () => {
-                                await setDoc(tripRef, {
-                                    days: JSON.parse(JSON.stringify(days.value)),
-                                    expenses: JSON.parse(JSON.stringify(expenses.value)),
-                                    exchangeRate: exchangeRate.value
-                                });
+                                if (isFirebaseReady.value) { // 只有當準備好後才寫入，避免空資料覆蓋
+                                    await setDoc(tripRef, {
+                                        days: JSON.parse(JSON.stringify(days.value)),
+                                        expenses: JSON.parse(JSON.stringify(expenses.value)),
+                                        exchangeRate: exchangeRate.value
+                                    });
+                                }
                             }, { deep: true });
-                            */
 
                         } catch (e) {
                             console.log("Firebase 尚未設定或錯誤", e);
@@ -905,9 +913,9 @@
                     } else {
                         // 純單機模式：監聽並存 LocalStorage
                         watch([days, expenses, exchangeRate], () => {
-                            localStorage.setItem('tokyo_days_v4', JSON.stringify(days.value));
-                            localStorage.setItem('tokyo_exp_v4', JSON.stringify(expenses.value));
-                            localStorage.setItem('tokyo_rate_v4', exchangeRate.value.toString());
+                            localStorage.setItem('tokyo_days_v5', JSON.stringify(days.value));
+                            localStorage.setItem('tokyo_exp_v5', JSON.stringify(expenses.value));
+                            localStorage.setItem('tokyo_rate_v5', exchangeRate.value.toString());
                         }, { deep: true });
                     }
                 });
